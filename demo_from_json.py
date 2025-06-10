@@ -148,7 +148,7 @@ def run(args):
 
         writer.write(frame)
         frame_id += 1
-        if frame_id % 10 == 0:
+        if frame_id % 100 == 0:
             print('***********************************************************')
             print(f"[UCMCTrack] processed {frame_id} frames…", flush=True)
             print('***********************************************************')
