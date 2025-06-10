@@ -44,43 +44,64 @@ class Detection:
 
 
 class Detector:
-    """Wrap image-to-ground mapping + loading detections from JSON."""
+    """Load precomputed detections from JSON and map them to ground."""
     def __init__(self, cam_para_file, det_json_path):
-        # only need the mapper
         self.mapper = Mapper(cam_para_file, "MOT17")
-        # load all detections once
         with open(det_json_path, "r") as f:
             self.raw = json.load(f)
 
     def get_dets(self, frame_id, conf_thresh=0.01):
-        """
-        Build Detection objects for this frame_id (1-based).
-        Assumes self.raw is a list indexed 0..N-1, each entry a dict
-        with keys "boxes", "scores", "classes".
-        """
         idx = frame_id - 1
         if idx < 0 or idx >= len(self.raw):
             return []
-        entry = self.raw[idx]
-        boxes  = entry["boxes"]
-        scores = entry["scores"]
-        classes= entry["classes"]
 
-        dets = []
-        det_id = 0
-        for b, conf, cls in zip(boxes, scores, classes):
-            if conf < conf_thresh:
-                continue
-            x1, y1, x2, y2 = b
-            w, h = x2 - x1, y2 - y1
-            if w <= 0 or h <= 0:
-                continue
-            det = Detection(det_id, x1, y1, w, h, conf, cls)
-            det.y, det.R = self.mapper.mapto(
-                [det.bb_left, det.bb_top, det.bb_width, det.bb_height])
-            dets.append(det)
-            det_id += 1
+        entry = self.raw[idx]
+        dets, det_id = [], 0
+
+        if isinstance(entry, list):
+            # filtered_detections.json style: a list of {x1,y1,x2,y2,confidence,class_id}
+            for dd in entry:
+                conf = float(dd.get("confidence", 0))
+                if conf < conf_thresh:
+                    continue
+                x1, y1 = float(dd["x1"]), float(dd["y1"])
+                x2, y2 = float(dd["x2"]), float(dd["y2"])
+                w, h = x2 - x1, y2 - y1
+                if w <= 0 or h <= 0:
+                    continue
+
+                det = Detection(det_id, x1, y1, w, h, conf, int(dd.get("class_id", 0)))
+                det.y, det.R = self.mapper.mapto(
+                    [det.bb_left, det.bb_top, det.bb_width, det.bb_height])
+                dets.append(det)
+                det_id += 1
+
+        elif isinstance(entry, dict):
+            # full to_json() style: dict with "boxes", "scores", "classes"
+            boxes   = entry["boxes"]
+            scores  = entry["scores"]
+            classes = entry["classes"]
+
+            for b, conf, cls in zip(boxes, scores, classes):
+                if conf < conf_thresh:
+                    continue
+                x1, y1, x2, y2 = map(float, b)
+                w, h = x2 - x1, y2 - y1
+                if w <= 0 or h <= 0:
+                    continue
+
+                det = Detection(det_id, x1, y1, w, h, conf, int(cls))
+                det.y, det.R = self.mapper.mapto(
+                    [det.bb_left, det.bb_top, det.bb_width, det.bb_height])
+                dets.append(det)
+                det_id += 1
+
+        else:
+            # unexpected format
+            raise ValueError(f"Unrecognized entry format for frame {frame_id}: {type(entry)}")
+
         return dets
+
 
 
 def run(args):
