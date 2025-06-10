@@ -49,14 +49,7 @@ class Detector:
         self.mapper = Mapper(cam_para_file, "MOT17")
         with open(det_json_path, "r") as f:
             self.raw = json.load(f)
-
-    class Detector:
-    """Load precomputed detections from JSON and map them to ground."""
-    def __init__(self, cam_para_file, det_json_path):
-        self.mapper = Mapper(cam_para_file, "MOT17")
-        with open(det_json_path, "r") as f:
-            self.raw = json.load(f)
-
+            
     def get_dets(self, frame_id, conf_thresh=0.01):
         """
         Pull detections for this frame_id (1-based) from your JSON of the form:
