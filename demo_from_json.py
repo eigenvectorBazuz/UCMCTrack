@@ -44,53 +44,49 @@ class Detection:
 
 
 class Detector:
-    """Load precomputed detections from JSON and map them to ground."""
     def __init__(self, cam_para_file, det_json_path):
         self.mapper = Mapper(cam_para_file, "MOT17")
         with open(det_json_path, "r") as f:
             self.raw = json.load(f)
-            
+
     def get_dets(self, frame_id, conf_thresh=0.01):
-        """
-        Pull detections for this frame_id (1-based) from your JSON of the form:
-        [
-          [   # frame 1
-            { "name":"car", "class":2, "confidence":0.86,
-              "box": {"x1":…, "y1":…, "x2":…, "y2":…}
-            },
-            …
-          ],
-          [   # frame 2
-            …
-          ],
-          …
-        ]
-        """
         idx = frame_id - 1
         if idx < 0 or idx >= len(self.raw):
             return []
 
+        entry = self.raw[idx]
         dets, det_id = [], 0
-        for dd in self.raw[idx]:
-            conf = float(dd["confidence"])
-            if conf < conf_thresh:
-                continue
 
-            b = dd["box"]
-            x1, y1 = float(b["x1"]), float(b["y1"])
-            x2, y2 = float(b["x2"]), float(b["y2"])
-            w, h = x2 - x1, y2 - y1
-            if w <= 0 or h <= 0:
-                continue
+        # we assume entry is a list of dicts with "box" & "confidence"
+        for i, dd in enumerate(entry):
+            try:
+                # attempt to parse
+                conf = float(dd["confidence"])
+                if conf < conf_thresh:
+                    continue
 
-            det = Detection(det_id, x1, y1, w, h,
-                            conf, int(dd["class"]))
-            det.y, det.R = self.mapper.mapto(
-                [det.bb_left, det.bb_top, det.bb_width, det.bb_height])
-            dets.append(det)
-            det_id += 1
+                b = dd["box"]
+                x1, y1 = float(b["x1"]), float(b["y1"])
+                x2, y2 = float(b["x2"]), float(b["y2"])
+                w, h = x2 - x1, y2 - y1
+                if w <= 0 or h <= 0:
+                    continue
+
+                det = Detection(det_id, x1, y1, w, h, conf, int(dd["class"]))
+                det.y, det.R = self.mapper.mapto(
+                    [det.bb_left, det.bb_top, det.bb_width, det.bb_height])
+                dets.append(det)
+                det_id += 1
+
+            except Exception as e:
+                # debug output: frame and index, plus the bad entry
+                print(f"[DEBUG] Failed to parse detection in frame {frame_id}, "
+                      f"entry {i}: {dd!r}\n         Error: {e}")
+                # skip this detection and continue
+                continue
 
         return dets
+
 
 
 
